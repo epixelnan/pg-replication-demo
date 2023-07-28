@@ -1,0 +1,63 @@
+version: '3'
+services:
+  authdb:
+    build:
+      context: authdb
+    volumes:
+      - ./authdb/init:/docker-entrypoint-initdb.d
+      - ./authdb/pg_hba.conf:/var/lib/postgresql/pg_hba.conf
+    env_file:
+      - ./env-secret/authdb.self.secret.env
+      # PGPOOL_SR_CHECK_PASSWORD (for user creation)
+      - ./env-secret/authdb-replicator.secret.env
+    # TODO use constants/env for healthcheck timing values
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # TODO make sure started only after authdb is ready or is capable of waiting (pg_basebackup will fail otherwise)
+  authdb-follow-1:
+    build:
+      context: authdb-follow
+    environment:
+      - MASTER_HOST=authdb
+    env_file:
+      - ./env-secret/authdb.self.secret.env
+      - ./env-secret/authdb-replicator.secret.env
+    # TODO use constants/env for healthcheck timing values
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      authdb:
+        condition: service_healthy
+
+  # TODO make sure started only after authdb is ready or is capable of waiting (pg_basebackup will fail otherwise)
+  authdb-follow-2:
+    build:
+      context: authdb-follow
+    environment:
+      - MASTER_HOST=authdb
+    env_file:
+      - ./env-secret/authdb.self.secret.env
+      - ./env-secret/authdb-replicator.secret.env
+    # TODO use constants/env for healthcheck timing values
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      authdb:
+        condition: service_healthy
+        
+# Configuring subnet because pg_hba.conf (authdb replication) depends on it
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${SUBNET-172.0.0.0/12}
